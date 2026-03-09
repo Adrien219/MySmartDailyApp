@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 - S.H.O.S</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Courier Prime', monospace;
+            background: linear-gradient(135deg, #0a0e27 0%, #16213e 50%, #0a0e27 100%);
+            color: #00ff88;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .back-link {
+            color: #00b4ff;
+            text-decoration: none;
+            margin-bottom: 30px;
+            display: inline-block;
+            font-size: 1.1rem;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(135deg, #00ff88 0%, #00b4ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 40px;
+            font-family: 'Space Mono', monospace;
+            letter-spacing: 2px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+        }
+
+        .card {
+            background: rgba(20, 50, 80, 0.5);
+            backdrop-filter: blur(20px);
+            border: 2px solid rgba(0, 255, 136, 0.3);
+            border-radius: 15px;
+            padding: 25px;
+            animation: slideUp 0.6s ease-out;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(0, 255, 136, 0.8);
+            box-shadow: 0 0 30px rgba(0, 255, 136, 0.2);
+        }
+
+        .card-title {
+            font-size: 1.2rem;
+            color: #00b4ff;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+            font-weight: 700;
+        }
+
+        .value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #00ff88;
+            margin-bottom: 10px;
+            font-family: 'Space Mono', monospace;
+        }
+
+        .status {
+            font-size: 0.9rem;
+            color: #00b4ff;
+        }
+
+        .stream-section {
+            margin-top: 40px;
+        }
+
+        .stream-title {
+            font-size: 1.5rem;
+            color: #00ff88;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .stream-container {
+            background: rgba(10, 20, 40, 0.6);
+            border: 2px solid rgba(0, 255, 136, 0.3);
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            min-height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .stream-placeholder {
+            color: #00b4ff;
+            font-size: 1.1rem;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .info-box {
+            background: rgba(0, 150, 100, 0.1);
+            border-left: 3px solid #00ff88;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 40px;
+            color: #00ff88;
+        }
+
+        .info-box h3 {
+            margin-bottom: 10px;
+            color: #00ff88;
+        }
+
+        .info-box p {
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-link">← Retour</a>
+
+        <h1>🛰️ ESP32 - MODULE AVANCÉ</h1>
+
+        <div class="grid">
+            <div class="card">
+                <div class="card-title">Signal WiFi</div>
+                <div class="value" id="wifi-signal">--</div>
+                <div class="status">RSSI (dBm)</div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">Mémoire</div>
+                <div class="value" id="esp32-memory">--</div>
+                <div class="status">MB disponible</div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">Température CPU</div>
+                <div class="value" id="esp32-temp">--</div>
+                <div class="status">°C</div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">Uptime</div>
+                <div class="value" id="esp32-uptime">--</div>
+                <div class="status">Heures</div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">Capteurs Connectés</div>
+                <div class="value" id="esp32-sensors">--</div>
+                <div class="status">Capteurs actifs</div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">Fréquence CPU</div>
+                <div class="value" id="esp32-freq">--</div>
+                <div class="status">MHz</div>
+            </div>
+        </div>
+
+        <div class="stream-section">
+            <div class="stream-title">📹 Flux Caméra ESP32</div>
+            <div class="stream-container">
+                <div class="stream-placeholder">
+                    ⏳ Connexion aux flux ESP32...<br>
+                    Les données seront affichées ici une fois connectées
+                </div>
+            </div>
+        </div>
+
+        <div class="info-box">
+            <h3>ℹ️  À propos du module ESP32</h3>
+            <p>
+                L'ESP32 est un microcontrôleur puissant avec WiFi intégré. Ce module assure:
+                <br>• Communication en temps réel
+                <br>• Capteurs avancés (température, pression, humidité)
+                <br>• Stream vidéo en direct
+                <br>• Autonomie énergétique étendue
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+
+        socket.on('esp32_update', (data) => {
+            console.log('Données ESP32:', data);
+
+            if (data.wifi_signal) document.getElementById('wifi-signal').textContent = data.wifi_signal;
+            if (data.memory) document.getElementById('esp32-memory').textContent = data.memory;
+            if (data.temperature) document.getElementById('esp32-temp').textContent = data.temperature;
+            if (data.uptime) document.getElementById('esp32-uptime').textContent = data.uptime;
+            if (data.sensors_count) document.getElementById('esp32-sensors').textContent = data.sensors_count;
+            if (data.frequency) document.getElementById('esp32-freq').textContent = data.frequency;
+        });
+    </script>
+</body>
+</html>

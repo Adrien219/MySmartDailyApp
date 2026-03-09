@@ -1,0 +1,647 @@
+╔════════════════════════════════════════════════════════════════════════╗
+║                                                                        ║
+║         🚀 S.H.O.S FINAL - GUIDE DÉMARRAGE ULTRA-COMPLET 🚀          ║
+║                                                                        ║
+║    Reconnaissance Faciale ESP32 + Profiles Personnalisés              ║
+║    + Diagnostic Temps Réel + Capteurs Téléphone + Plugins            ║
+║                                                                        ║
+╚════════════════════════════════════════════════════════════════════════╝
+
+
+═════════════════════════════════════════════════════════════════════════
+📦 ÉTAPE 0: EXTRAIRE LE ZIP
+═════════════════════════════════════════════════════════════════════════
+
+1. Télécharger: SHOS_FINAL_COMPLETE.zip
+2. Extraire le ZIP dans un dossier (ex: D:\SHOS_FINAL ou ~/SHOS_FINAL)
+3. Ouvrir une fenêtre Terminal/PowerShell dans ce dossier
+
+
+═════════════════════════════════════════════════════════════════════════
+⬇️ ÉTAPE 1: INSTALLER LES DÉPENDANCES (5 MIN)
+═════════════════════════════════════════════════════════════════════════
+
+Windows (PowerShell Admin):
+─────────────────────────
+
+  pip install paho-mqtt==2.1.0 flask flask-socketio eventlet psutil pyserial pillow
+
+Attendre la fin (ça prend ~2-3 minutes)
+
+
+Raspberry Pi (Terminal):
+───────────────────────
+
+  pip3 install paho-mqtt==2.1.0 flask flask-socketio eventlet psutil pyserial pillow
+
+
+═════════════════════════════════════════════════════════════════════════
+🔌 ÉTAPE 2: INSTALLER MOSQUITTO MQTT (5 MIN)
+═════════════════════════════════════════════════════════════════════════
+
+Windows:
+────────
+
+  1. Télécharger: https://mosquitto.org/download/
+  2. Choisir: mosquitto-2.0.18-install-windows-x64.exe
+  3. Installer avec les paramètres par défaut
+  4. ✅ COCHER: "Add Mosquitto to PATH"
+  5. Terminer l'installation
+
+Vérifier:
+  • Ouvrir PowerShell
+  • Taper: mosquitto --version
+  • Doit afficher une version
+
+
+Raspberry Pi:
+──────────────
+
+  sudo apt update
+  sudo apt install mosquitto mosquitto-clients -y
+  sudo systemctl start mosquitto
+  sudo systemctl enable mosquitto
+
+Vérifier:
+  mosquitto --version
+
+
+═════════════════════════════════════════════════════════════════════════
+🎥 ÉTAPE 3: CONFIGURER ESP32-CAM (OPTIONNEL - 15 MIN)
+═════════════════════════════════════════════════════════════════════════
+
+Si vous avez un ESP32-CAM:
+
+  1. Installer Arduino IDE
+     https://www.arduino.cc/en/software
+
+  2. Ajouter le support ESP32
+     Fichier → Préférences → URL de gestionnaire de cartes:
+     https://espressif-dl.cn/arduino_esp32/package_esp32_index.json
+
+  3. Ouvrir le code
+     Fichier → Ouvrir → esp32_firmware/esp32_camera_complete.ino
+
+  4. Modifier les paramètres WiFi
+     Ligne 8-10:
+     const char* ssid = "VotreWiFi";           // ← Votre WiFi
+     const char* password = "VotreMotDePasse"; // ← Votre mot de passe
+     const char* mqtt_broker = "192.168.1.X";  // ← IP de votre PC/RPI
+
+  5. Configurer Arduino
+     Board: ESP32-CAM
+     Upload Speed: 921600
+     COM Port: Votre port (ex: COM3)
+
+  6. Upload vers ESP32
+     Sketch → Upload (Ctrl+U)
+
+  7. Vérifier dans Serial Monitor (Outils → Serial Monitor)
+     Doit afficher:
+     ✅ Camera initialisée
+     ✅ WiFi connecté!
+     📍 IP: 192.168.1.Y
+
+
+═════════════════════════════════════════════════════════════════════════
+🚀 ÉTAPE 4: LANCER LE SYSTÈME (10 MIN)
+═════════════════════════════════════════════════════════════════════════
+
+IMPORTANT: Lancer dans CET ORDRE et ATTENDRE ~20 secondes entre chaque!
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ TERMINAL 1 - MOSQUITTO (LANCER CECI EN PREMIER!)                  │
+├─────────────────────────────────────────────────────────────────────┤
+
+  Windows: mosquitto
+  Linux:   sudo systemctl status mosquitto
+
+  ✅ Attendre: "mosquitto is running" ou "active (running)"
+
+  ⏱️ ATTENDRE 10 SECONDES AVANT TERMINAL 2
+
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ TERMINAL 2 - BACKBONE (⏳ ATTENDRE 10 SEC APRÈS TERMINAL 1)         │
+├─────────────────────────────────────────────────────────────────────┤
+
+  Windows: python backbone_ultimate.py
+  Linux:   python3 backbone_ultimate.py
+
+  ✅ Attendre:
+     "✅ MQTT Client démarré"
+     "📡 Connecté au broker MQTT"
+
+  ⏱️ ATTENDRE 10 SECONDES AVANT TERMINAL 3
+
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ TERMINAL 3 - BRIDGE ARDUINO (⏳ ATTENDRE 10 SEC APRÈS TERMINAL 2)   │
+├─────────────────────────────────────────────────────────────────────┤
+
+  Windows: python bridge_v2.py
+  Linux:   python3 bridge_v2.py
+
+  ✅ Attendre:
+     "✅ [SERIAL] Arduino trouvé sur COM3" (ou autre port)
+     "🔄 [BRIDGE] Scan en cours..."
+
+  ⚠️ Si erreur "Arduino not found": Vérifier le port COM
+     dans Gestionnaire des périphériques (Windows)
+
+  ⏱️ ATTENDRE 10 SECONDES AVANT TERMINAL 4
+
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ TERMINAL 4 - FLASK V3 (⏳ ATTENDRE 10 SEC APRÈS TERMINAL 3)        │
+├─────────────────────────────────────────────────────────────────────┤
+
+  Windows: python app_complete.py
+  Linux:   python3 app_complete.py
+
+  ✅ Attendre:
+     "Running on 0.0.0.0:5000"
+
+  ✅ TOUS LES SERVICES SONT PRÊTS!
+
+
+═════════════════════════════════════════════════════════════════════════
+🌐 ÉTAPE 5: OUVRIR L'INTERFACE (2 MIN)
+═════════════════════════════════════════════════════════════════════════
+
+Ouvrir Chrome (recommandé):
+
+  http://localhost:5000
+
+Vous verrez l'écran d'accueil avec 6 boutons:
+
+  📊 Dashboard     → Affichage temps réel des capteurs
+  ⚙️ Profils       → Créer/Éditer avec drag-and-drop
+  🔧 Diagnostic    → Monitoring 10 sections
+  📱 Mobile        → Capteurs téléphone
+  🎥 ESP32 CAM     → Streaming + reconnaissance faciale
+  ⚙️ Paramètres    → Configuration système
+
+
+═════════════════════════════════════════════════════════════════════════
+⚙️ ÉTAPE 6: CRÉER UN PROFIL PERSONNALISÉ (5 MIN)
+═════════════════════════════════════════════════════════════════════════
+
+1. Aller à: http://localhost:5000/profiles
+
+2. Vous voyez 3 profils préconfigurés:
+   • EXPLORATION (Vision IA + Danger)
+   • SURVEILLANCE (Danger 24/7)
+   • INSPECTION (Vision IA + inspection)
+
+3. Créer un profil
+   Cliquer: "Créer Profil"
+   
+   Remplir:
+   • Nom: "Mon Profil"
+   • Description: "Mon profil personnalisé"
+   • Sélectionner les modules
+
+4. DRAG-AND-DROP des blocs capteurs
+   
+   Traîner vers "Capteurs Actifs":
+   • 🌡️ Température (seuil: 50°C)
+   • 💧 Humidité (seuil: 80%)
+   • ⚠️ Gaz (seuil: 400ppm)
+   • 📏 Distance (seuil: 100cm)
+   • 🎥 ESP32 Camera (FPS: 15)
+   • 📱 Mobile GPS (intervalle: 5s)
+
+5. Ajouter des alertes
+   
+   Cliquer: "+ Ajouter Alerte"
+   • Alerte critique gaz (> 400ppm)
+   • Alerte température (> 50°C)
+   • Alerte flamme détectée
+
+6. SAUVEGARDER
+   Cliquer: "💾 Sauvegarder"
+   
+   ✅ Profil sauvegardé dans data/profiles.json
+
+
+═════════════════════════════════════════════════════════════════════════
+📱 ÉTAPE 7: CONNECTER VOTRE TÉLÉPHONE (3 MIN)
+═════════════════════════════════════════════════════════════════════════
+
+1. Trouver l'IP de votre ordinateur
+   
+   Windows (PowerShell):
+     ipconfig
+   
+   Chercher: "IPv4 Address: 192.168.1.X"
+   
+   Raspberry Pi (Terminal):
+     hostname -I
+
+2. Sur votre téléphone
+   
+   • S'assurer que le téléphone est sur le MÊME WiFi
+   • Ouvrir Chrome
+   • Aller à: http://192.168.1.50:5000/mobile
+   
+   (remplacer 192.168.1.50 par VOTRE IP)
+
+3. Cliquer: "✅ Activer les capteurs"
+
+4. Accepter les permissions:
+   • GPS (position)
+   • Motion (accélération)
+   • Battery (batterie)
+   • Camera light (luminosité)
+
+5. Les données apparaissent AUTOMATIQUEMENT! ✅
+   
+   Vous verrez:
+   📍 GPS (latitude, longitude, altitude)
+   ⚡ Accélération (X, Y, Z)
+   🔄 Gyroscope (rotation)
+   🔋 Batterie (% + charge)
+   💡 Luminosité (Lux)
+   👆 Proximité (cm)
+
+
+═════════════════════════════════════════════════════════════════════════
+🔧 ÉTAPE 8: UTILISER LE DIAGNOSTIC (5 MIN)
+═════════════════════════════════════════════════════════════════════════
+
+Aller à: http://localhost:5000/diagnostic
+
+Vous verrez 10 sections en temps réel:
+
+1. 📡 MQTT Broker
+   Status: ACTIF/INACTIF
+   Topics: shos/sensors/*, shos/alert/*, etc.
+   Débit: X msg/sec
+
+2. 🔌 Hardware Arduino
+   Status: CONNECTÉ/DÉCONNECTÉ
+   Port: COM3 ou /dev/ttyUSB0
+   Dernière lecture: Timestamp
+
+3. ⚙️ Backbone Kernel
+   Status: ACTIF/ARRÊTÉ
+   Uptime: Depuis X minutes
+   Alertes détectées: X
+
+4. 🌐 Flask Server
+   Status: ACTIF
+   Clients connectés: X
+   Latence: X ms
+
+5. 🌡️ Capteurs Arduino (TEMPS RÉEL)
+   Température: 25°C
+   Humidité: 60%
+   Gaz: 150ppm
+   Distance: 200cm
+
+6. 💻 Système Local
+   CPU: 15%
+   RAM: 40%
+   Disque: 25%
+   Température CPU: 45°C
+
+7. 🛰️ ESP32 Module (si configuré)
+   Status: CONNECTÉ
+   WiFi Signal: -65dBm
+   Mémoire: 200MB
+   Température: 35°C
+
+8. 📱 Capteurs Téléphone (si activé)
+   Status: CONNECTÉ
+   GPS: 48.8566°, 2.3522°
+   Accélération: 9.8 m/s²
+   Batterie: 85%
+
+9. 🚨 Alertes Actives
+   Liste des alertes en cours
+
+10. 📊 Logs Système
+    Historique (100 dernières entrées)
+    Export PDF/CSV possible
+
+
+═════════════════════════════════════════════════════════════════════════
+🎥 ÉTAPE 9: CONFIGURER ESP32 CAM (10 MIN - OPTIONNEL)
+═════════════════════════════════════════════════════════════════════════
+
+Si vous avez un ESP32-CAM:
+
+1. Récupérer l'IP de l'ESP32
+   
+   Dans le Serial Monitor Arduino:
+   "IP: 192.168.1.Y"
+   
+   Ou via ping:
+   ping -a 255.255.255.255 (pour trouver ESP32)
+
+2. Aller à: http://localhost:5000/esp32_cam
+
+3. Entrer l'IP:
+   "IP du ESP32: 192.168.1.Y"
+
+4. Cliquer: "Connecter"
+
+5. Vous verrez:
+   🎬 Streaming vidéo MJPEG en temps réel
+   👤 Compteur de visages détectés
+   📊 Télémétrie:
+      - FPS: 15
+      - Température: 35°C
+      - WiFi Signal: -65dBm
+      - Mémoire libre: 200MB
+      - Uptime: X minutes
+
+
+═════════════════════════════════════════════════════════════════════════
+✅ VÉRIFIER QUE TOUT FONCTIONNE
+═════════════════════════════════════════════════════════════════════════
+
+Checklist complète:
+
+Installation:
+  [✓] Python 3.9+ installé
+  [✓] pip fonctionne
+  [✓] Dépendances installées
+  [✓] Mosquitto installé
+
+Services lancés:
+  [✓] Terminal 1: Mosquitto "is running"
+  [✓] Terminal 2: Backbone "MQTT Client démarré"
+  [✓] Terminal 3: Bridge "Arduino trouvé"
+  [✓] Terminal 4: Flask "Running on 0.0.0.0:5000"
+
+Interface accessible:
+  [✓] http://localhost:5000 s'ouvre
+  [✓] Menu principal visible
+  [✓] 6 boutons affichés
+
+Données affichées:
+  [✓] Dashboard: capteurs visibles
+  [✓] Diagnostic: 10 sections remplies
+  [✓] Profils: 3 profils chargés
+  [✓] Mobile: peut être activé
+  [✓] ESP32: s'affiche si connecté
+
+Tests avancés:
+  [✓] Profil créé et sauvegardé
+  [✓] Téléphone connecté et transmet données
+  [✓] Diagnostic met à jour chaque seconde
+  [✓] Graphiques en temps réel
+  [✓] Alertes détectées et affichées
+  [✓] Logs disponibles
+
+
+═════════════════════════════════════════════════════════════════════════
+📊 PAGES & FONCTIONNALITÉS DISPONIBLES
+═════════════════════════════════════════════════════════════════════════
+
+ACCUEIL (http://localhost:5000/)
+  ├─ 6 boutons de navigation
+  └─ Affiche le statut système
+
+DASHBOARD (http://localhost:5000/dashboard)
+  ├─ Affichage temps réel de TOUS les capteurs
+  ├─ Graphiques en direct
+  ├─ Statut modules et plugins
+  └─ Alertes actives
+
+PROFILS (http://localhost:5000/profiles) ⭐
+  ├─ 3 profils préconfigurés visibles
+  ├─ Créer un profil (formulaire)
+  ├─ Éditer un profil (modifier seuils)
+  ├─ Dupliquer un profil (copie rapide)
+  ├─ Supprimer un profil (avec confirmation)
+  ├─ DRAG-AND-DROP des blocs capteurs ✨
+  │  ├─ Température
+  │  ├─ Humidité
+  │  ├─ Gaz
+  │  ├─ Distance
+  │  ├─ ESP32 Camera
+  │  └─ Mobile GPS
+  ├─ Ajouter des alertes personnalisées
+  └─ Sauvegarder (JSON automatique)
+
+DIAGNOSTIC (http://localhost:5000/diagnostic)
+  ├─ 10 sections de monitoring
+  ├─ MQTT Broker status
+  ├─ Arduino hardware info
+  ├─ Backbone kernel monitoring
+  ├─ Flask server info
+  ├─ Capteurs en temps réel
+  ├─ Système local (CPU, RAM, Disque)
+  ├─ ESP32 module status
+  ├─ Capteurs téléphone
+  ├─ Alertes actives
+  ├─ Logs système (100 entrées)
+  ├─ Graphiques (T, H, G)
+  ├─ Boutons: Actualiser, Effacer logs, Exporter
+  └─ Mise à jour auto chaque 1 seconde
+
+MOBILE (http://localhost:5000/mobile)
+  ├─ Configuration automatique de l'adresse
+  ├─ Guide d'activation sur le téléphone
+  ├─ Affichage temps réel:
+  │  ├─ 📍 GPS
+  │  ├─ ⚡ Accélération
+  │  ├─ 🔄 Gyroscope
+  │  ├─ 🔋 Batterie
+  │  ├─ 💡 Luminosité
+  │  └─ 👆 Proximité
+  ├─ Socket.IO en temps réel
+  └─ Données MQTT publiées
+
+ESP32 CAM (http://localhost:5000/esp32_cam)
+  ├─ Configuration IP ESP32
+  ├─ Streaming vidéo MJPEG
+  ├─ Reconnaissance faciale (compteur visages)
+  ├─ Télémétrie:
+  │  ├─ FPS du stream
+  │  ├─ Température ESP32
+  │  ├─ WiFi signal strength
+  │  ├─ Mémoire libre
+  │  └─ Uptime
+  └─ Enregistrement optionnel
+
+PARAMÈTRES (http://localhost:5000/settings)
+  ├─ Configuration MQTT
+  ├─ Gestion profils (backup/restore)
+  ├─ Paramètres plugins
+  ├─ Export/Import données
+  └─ Préférences système
+
+
+═════════════════════════════════════════════════════════════════════════
+💾 DONNÉES SAUVEGARDÉES
+═════════════════════════════════════════════════════════════════════════
+
+Tous les fichiers dans le dossier du projet:
+
+data/
+  ├─ profiles.json           ← Profils créés/modifiés
+  ├─ history/
+  │  └─ 2026-03-07.json     ← Historique 7 jours
+  ├─ alerts/
+  │  └─ 2026-03-07.json     ← Alertes détectées
+  └─ diagnostics/
+     └─ 2026-03-07.json     ← Snapshots diagnostics
+
+Configuration:
+  ├─ config/config_final.json ← Config système
+  └─ config.json              ← Config existante
+
+
+═════════════════════════════════════════════════════════════════════════
+🆘 TROUBLESHOOTING
+═════════════════════════════════════════════════════════════════════════
+
+❌ "Python not found"
+   → Installer Python depuis python.org
+   → Redémarrer PowerShell
+   → Taper: python --version
+
+❌ "pip not found"
+   → Installer avec: py -m pip install --upgrade pip
+   → Ou réinstaller Python en cochant "Add Python to PATH"
+
+❌ "Mosquitto not found"
+   → Télécharger depuis mosquitto.org
+   → Installer la version Windows
+   → Redémarrer PowerShell
+
+❌ "MQTT connection refused"
+   → Lancer Mosquitto EN PREMIER: mosquitto
+   → Attendre: "mosquitto is running"
+   → Relancer les autres services
+
+❌ "Arduino not found"
+   → Vérifier le port COM dans Gestionnaire des périphériques
+   → Modifier le port dans bridge_v2.py si nécessaire
+   → Brancher le câble USB
+   → Redémarrer Arduino
+
+❌ "Page blanche http://localhost:5000"
+   → Vérifier Terminal 4: Flask doit afficher "Running on 0.0.0.0:5000"
+   → Redémarrer Flask
+   → Vérifier les erreurs dans le terminal
+
+❌ "Profils ne se sauvegardent pas"
+   → Vérifier que le dossier data/ existe
+   → Vérifier les permissions du dossier
+   → Vérifier que data/profiles.json est accessible
+
+❌ "Téléphone ne peut pas accéder"
+   → Vérifier sur le même WiFi
+   → Utiliser l'IP correcte (ipconfig sur PC)
+   → Vérifier que http://<IP>:5000 s'ouvre sur PC aussi
+
+❌ "ESP32 ne se connecte pas"
+   → Vérifier le WiFi de l'ESP32
+   → Vérifier l'IP MQTT_broker dans le code Arduino
+   → Vérifier que Mosquitto fonctionne
+   → Redémarrer l'ESP32
+
+
+═════════════════════════════════════════════════════════════════════════
+📚 FICHIERS IMPORTANTS DU ZIP
+═════════════════════════════════════════════════════════════════════════
+
+À lancer:
+  ✅ app_complete.py       ← Flask V3 (NOUVEAU!)
+  ✅ backbone_ultimate.py  ← Normalisation
+  ✅ bridge_v2.py          ← Arduino bridge
+
+À configurer:
+  ✅ esp32_firmware/esp32_camera_complete.ino ← Arduino IDE
+
+Pour lire:
+  ✅ STARTUP_GUIDE.txt     ← Ce fichier
+  ✅ README_FINAL.txt      ← Résumé du projet
+  ✅ README.md             ← Documentation complète
+  ✅ Tous les GUIDE_*.md   ← Guides détaillés
+
+
+═════════════════════════════════════════════════════════════════════════
+✨ FONCTIONNALITÉS PRINCIPALES
+═════════════════════════════════════════════════════════════════════════
+
+✅ 3 Profils Préconfigurés
+   • Exploration (Vision IA)
+   • Surveillance (Danger 24/7)
+   • Inspection (Objets)
+
+✅ Créer/Éditer/Supprimer/Dupliquer Profils
+   • Interface web intuitive
+   • Sauvegarde JSON automatique
+   • Drag-and-drop des capteurs
+
+✅ Drag-and-Drop pour Ajouter des Blocs Capteurs
+   • Température, Humidité, Gaz, Distance
+   • ESP32 Camera, Mobile GPS
+   • Alertes personnalisées
+
+✅ Diagnostic Temps Réel (PC et Téléphone)
+   • 10 sections de monitoring
+   • Graphiques en temps réel
+   • Logs système (100 entrées)
+   • Export PDF/CSV
+
+✅ Capteurs Téléphone (GPS, Accel, Gyro, Batterie, etc.)
+   • Activation simple sur le téléphone
+   • Données en temps réel via Socket.IO
+   • Affichage sur diagnostic
+
+✅ ESP32-CAM avec Reconnaissance Faciale
+   • Streaming vidéo MJPEG
+   • Détection visages (OpenFace)
+   • Télémétrie temps réel
+   • Enregistrement optionnel
+
+✅ Plugins Intégrés et Adaptés
+   • Danger Monitor (surveillance)
+   • Vision Objet (détection IA YOLO)
+   • Voice Assistant (TTS/STT)
+
+✅ Système Hybride (Ancien + Futuriste)
+   • Design fusionné
+   • Compatibilité totale
+   • Performances optimisées
+
+✅ Sauvegarde JSON (7 jours)
+   • Historiques automatiques
+   • Profils persistants
+   • Alertes archivées
+
+
+═════════════════════════════════════════════════════════════════════════
+🎉 VOUS ÊTES PRÊT!
+═════════════════════════════════════════════════════════════════════════
+
+Suivez simplement le guide en 9 étapes:
+
+  1. Extraire le ZIP
+  2. Installer dépendances
+  3. Installer Mosquitto
+  4. Configurer ESP32 (optionnel)
+  5. Lancer les 4 services
+  6. Ouvrir http://localhost:5000
+  7. Créer un profil
+  8. Connecter le téléphone
+  9. Utiliser le diagnostic
+
+Dans ~30 minutes, vous avez un système de surveillance COMPLET! 🚀
+
+
+═════════════════════════════════════════════════════════════════════════
+
+Besoin d'aide? Consultez les fichiers GUIDE_*.md dans le ZIP!
+
+S.H.O.S FINAL V3.0 - COMPLET, FONCTIONNEL, PRÊT! 🎉
+
+═════════════════════════════════════════════════════════════════════════
+

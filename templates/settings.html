@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paramètres - S.H.O.S</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #0a0e27 0%, #16213e 50%, #0a0e27 100%);
+            color: #00ff88;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container { max-width: 1000px; margin: 0 auto; }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            border-bottom: 2px solid #00ff88;
+            padding-bottom: 20px;
+        }
+        .header h1 {
+            font-size: 2rem;
+            background: linear-gradient(135deg, #00ff88, #00b4ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+        .back-link {
+            color: #00b4ff;
+            text-decoration: none;
+            display: inline-block;
+            margin-top: 10px;
+        }
+        .settings-section {
+            background: rgba(20, 50, 80, 0.5);
+            border: 2px solid rgba(0, 255, 136, 0.3);
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+        .section-title {
+            font-size: 1.3rem;
+            color: #00ff88;
+            margin-bottom: 20px;
+            font-weight: bold;
+            text-transform: uppercase;
+            border-bottom: 1px solid #00ff88;
+            padding-bottom: 15px;
+        }
+        .setting-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: rgba(10, 30, 50, 0.5);
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border-left: 3px solid #00ff88;
+        }
+        .setting-label {
+            color: #00ff88;
+            font-weight: bold;
+        }
+        .setting-value {
+            color: #00b4ff;
+            font-size: 0.9rem;
+        }
+        .toggle-switch {
+            width: 50px;
+            height: 24px;
+            background: #ff6666;
+            border-radius: 12px;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s;
+        }
+        .toggle-switch.active {
+            background: #00ff88;
+        }
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: all 0.3s;
+        }
+        .toggle-switch.active::after {
+            left: 28px;
+        }
+        .input-field {
+            padding: 10px;
+            background: rgba(0, 50, 80, 0.3);
+            border: 1px solid #00ff88;
+            color: #00ff88;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            min-width: 200px;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 30px;
+        }
+        .btn {
+            background: linear-gradient(135deg, #00ff88, #00b4ff);
+            color: #0a0e27;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .btn.danger {
+            background: linear-gradient(135deg, #ff6666, #ff9999);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-link">← Retour à l'accueil</a>
+        <div class="header">
+            <h1>⚙️ Paramètres Système</h1>
+        </div>
+
+        <!-- Configuration MQTT -->
+        <div class="settings-section">
+            <div class="section-title">📡 Configuration MQTT</div>
+            <div class="setting-item">
+                <div>
+                    <div class="setting-label">Hôte MQTT</div>
+                    <div class="setting-value">Adresse du broker</div>
+                </div>
+                <input type="text" class="input-field" id="mqtt-host" value="localhost" placeholder="localhost">
+            </div>
+            <div class="setting-item">
+                <div>
+                    <div class="setting-label">Port MQTT</div>
+                    <div class="setting-value">Port de connexion</div>
+                </div>
+                <input type="number" class="input-field" id="mqtt-port" value="1883" placeholder="1883">
+            </div>
+        </div>
+
+        <!-- Configuration Capteurs -->
+        <div class="settings-section">
+            <div class="section-title">🌡️ Capteurs</div>
+            <div class="setting-item">
+                <div>
+                    <div class="setting-label">Arduino Activé</div>
+                    <div class="setting-value">Lire les données Arduino</div>
+                </div>
+                <div class="toggle-switch active" onclick="toggleSetting(this)"></div>
+            </div>
+            <div class="setting-item">
+                <div>
+                    <div class="setting-label">ESP32 Activé</div>
+                    <div class="setting-value">Recevoir ESP32 telemetry</div>
+                </div>
+                <div class="toggle-switch" onclick="toggleSetting(this)"></div>
+            </div>
+            <div class="setting-item">
+                <div>
+                    <div class="setting-label">Téléphone Activé</div>
+                    <div class="setting-value">Recevoir capteurs téléphone</div>
+                </div>
+                <div class="toggle-switch" onclick="toggleSetting(this)"></div>
+            </div>
+        </div>
+
+        <!-- Configuration Plugins -->
+        <div class="settings-section">
+            <div class="section-title">🔌 Plugins</div>
+            <div class="setting-item">
+                <div>
+                    <div class="setting-label">Danger Monitor</div>
+                    <div class="setting-value">Surveillance danger</div>
+                </div>
+                <div class="toggle-switch active" onclick="toggleSetting(this)"></div>
+            </div>
+            <div class="setting-item">
+                <div>
+                    <div class="setting-label">Vision Objet</div>
+                    <div class="setting-value">Détection objets IA</div>
+                </div>
+                <div class="toggle-switch active" onclick="toggleSetting(this)"></div>
+            </div>
+            <div class="setting-item">
+                <div>
+                    <div class="setting-label">Voice Assistant</div>
+                    <div class="setting-value">Assistant vocal TTS/STT</div>
+                </div>
+                <div class="toggle-switch active" onclick="toggleSetting(this)"></div>
+            </div>
+        </div>
+
+        <!-- Stockage Données -->
+        <div class="settings-section">
+            <div class="section-title">💾 Stockage Données</div>
+            <div class="setting-item">
+                <div>
+                    <div class="setting-label">Rétention Historique</div>
+                    <div class="setting-value">Nombre de jours</div>
+                </div>
+                <input type="number" class="input-field" id="retention-days" value="7" min="1" max="30" placeholder="7">
+            </div>
+            <div class="button-group">
+                <button class="btn" onclick="exportData()">📥 Exporter Données</button>
+                <button class="btn" onclick="importData()">📤 Importer Données</button>
+                <button class="btn danger" onclick="clearData()">🗑️ Effacer Tout</button>
+            </div>
+        </div>
+
+        <!-- À Propos -->
+        <div class="settings-section">
+            <div class="section-title">ℹ️ À Propos</div>
+            <div class="setting-item">
+                <div>
+                    <div class="setting-label">Version S.H.O.S</div>
+                    <div class="setting-value">Système complet</div>
+                </div>
+                <span style="color: #00ff88; font-weight: bold;">V3.0 FINAL</span>
+            </div>
+            <div class="setting-item">
+                <div>
+                    <div class="setting-label">Python</div>
+                    <div class="setting-value">Version requise</div>
+                </div>
+                <span style="color: #00ff88;">3.9+</span>
+            </div>
+            <div class="setting-item">
+                <div>
+                    <div class="setting-label">Plateforme</div>
+                    <div class="setting-value">Système d'exploitation</div>
+                </div>
+                <span style="color: #00ff88;">Windows / Raspberry Pi</span>
+            </div>
+        </div>
+
+        <div class="button-group">
+            <button class="btn" onclick="saveSettings()">💾 Sauvegarder</button>
+            <button class="btn" onclick="location.href='/'">← Retour</button>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+
+        function toggleSetting(elem) {
+            elem.classList.toggle('active');
+        }
+
+        function saveSettings() {
+            const settings = {
+                mqtt_host: document.getElementById('mqtt-host').value,
+                mqtt_port: document.getElementById('mqtt-port').value,
+                retention_days: document.getElementById('retention-days').value
+            };
+            localStorage.setItem('shos_settings', JSON.stringify(settings));
+            alert('✅ Paramètres sauvegardés!');
+        }
+
+        function exportData() {
+            const data = {
+                timestamp: new Date(),
+                version: 'V3.0',
+                settings: localStorage.getItem('shos_settings'),
+                profiles: localStorage.getItem('shos_profiles')
+            };
+            const json = JSON.stringify(data, null, 2);
+            const blob = new Blob([json], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `shos_backup_${new Date().toISOString()}.json`;
+            a.click();
+        }
+
+        function importData() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = (e) => {
+                const file = e.target.files[0];
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const data = JSON.parse(event.target.result);
+                    localStorage.setItem('shos_settings', data.settings);
+                    localStorage.setItem('shos_profiles', data.profiles);
+                    alert('✅ Données importées!');
+                };
+                reader.readAsText(file);
+            };
+            input.click();
+        }
+
+        function clearData() {
+            if (confirm('⚠️  Êtes-vous sûr? Cela supprimera TOUTES les données!')) {
+                localStorage.clear();
+                alert('✅ Données supprimées!');
+            }
+        }
+
+        // Charger les paramètres sauvegardés
+        const saved = localStorage.getItem('shos_settings');
+        if (saved) {
+            const settings = JSON.parse(saved);
+            document.getElementById('mqtt-host').value = settings.mqtt_host || 'localhost';
+            document.getElementById('mqtt-port').value = settings.mqtt_port || '1883';
+            document.getElementById('retention-days').value = settings.retention_days || '7';
+        }
+    </script>
+</body>
+</html>

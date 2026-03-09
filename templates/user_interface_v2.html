@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>S.H.O.S - HUD OPÉRATIONNEL</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        :root {
+            --main-cyan: #00d4ff;
+            --secondary-cyan: #00f9ff;
+            --danger-red: #ff3636;
+            --warning-orange: #ff9500;
+            --bg-dark: #0a0a0a;
+            --bg-semi: rgba(10, 10, 10, 0.9);
+            --border-dark: #1a1a1a;
+        }
+        
+        html, body {
+            width: 100%;
+            height: 100%;
+            background: var(--bg-dark);
+            color: var(--main-cyan);
+            font-family: 'Courier New', 'Courier', monospace;
+            overflow: hidden;
+        }
+        
+        /* === CONTENEUR PRINCIPAL === */
+        #hud-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            border: 2px solid var(--main-cyan);
+            background: var(--bg-dark);
+        }
+        
+        /* === ARRIÈRE-PLAN VIDÉO === */
+        #video-container {
+            position: relative;
+            flex: 1;
+            background: #000;
+            overflow: hidden;
+        }
+        
+        #video-bg {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0.7;
+        }
+        
+        .video-error {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: var(--danger-red);
+            font-size: 1.5em;
+            text-align: center;
+        }
+        
+        /* === WIDGETS === */
+        .widget {
+            position: absolute;
+            background: var(--bg-semi);
+            border: 1px solid var(--main-cyan);
+            border-radius: 3px;
+            padding: 12px;
+            font-size: 0.9em;
+            backdrop-filter: blur(5px);
+            z-index: 10;
+        }
+        
+        .widget.alert {
+            border-color: var(--danger-red);
+            background: rgba(255, 54, 54, 0.1);
+            animation: blink 0.5s infinite;
+        }
+        
+        .widget.warning {
+            border-color: var(--warning-orange);
+            background: rgba(255, 149, 0, 0.1);
+        }
+        
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        
+        /* === LAYOUT DES WIDGETS === */
+        #telemetry {
+            top: 20px;
+            left: 20px;
+            width: 220px;
+            min-height: 180px;
+        }
+        
+        #system-info {
+            top: 20px;
+            right: 20px;
+            width: 200px;
+            text-align: right;
+        }
+        
+        #alerts {
+            bottom: 80px;
+            left: 20px;
+            width: 300px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        #console {
+            bottom: 80px;
+            right: 20px;
+            width: 400px;
+            max-height: 200px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 8px;
+            font-size: 0.8em;
+        }
+        
+        .console-line {
+            margin: 2px 0;
+            color: var(--secondary-cyan);
+        }
+        
+        .console-error {
+            color: var(--danger-red);
+        }
+        
+        .console-warning {
+            color: var(--warning-orange);
+        }
+        
+        /* === BARRE DE STATUS === */
+        #status-bar {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 40px;
+            background: var(--main-cyan);
+            color: #000;
+            padding: 8px 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-weight: bold;
+            font-size: 0.85em;
+            z-index: 20;
+        }
+        
+        #socket-status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 2px;
+            font-weight: bold;
+            background: #000;
+            color: var(--danger-red);
+        }
+        
+        #socket-status.connected {
+            color: #00ff00;
+        }
+        
+        /* === VALEURS === */
+        .label {
+            font-size: 0.75em;
+            color: var(--secondary-cyan);
+            text-transform: uppercase;
+            opacity: 0.8;
+        }
+        
+        .value {
+            font-size: 1.8em;
+            font-weight: bold;
+            margin: 5px 0;
+            color: var(--main-cyan);
+        }
+        
+        .value.alert {
+            color: var(--danger-red);
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* === GRILLE === */
+        hr { border: none; border-top: 1px solid var(--border-dark); margin: 8px 0; }
+        
+        /* === SCROLLBAR CUSTOM === */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: var(--border-dark);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--main-cyan);
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="hud-container">
+    
+    <!-- VIDÉO -->
+    <div id="video-container">
+        <img id="video-bg" src="{{ url_for('video_feed') }}" alt="VIDEO INDISPONIBLE">
+    </div>
+    
+    <!-- WIDGET: TELEMETRIE CAPTEURS -->
+    <div id="telemetry" class="widget">
+        <div class="label">═══ CAPTEURS ═══</div>
+        <hr>
+        
+        <div class="label">Température</div>
+        <div class="value" id="val-temp">--°C</div>
+        
+        <div class="label">Humidité</div>
+        <div class="value" id="val-humidity">--%</div>
+        
+        <div class="label">Gaz (ppm)</div>
+        <div class="value" id="val-gas">--</div>
+        
+        <div class="label">Distance</div>
+        <div class="value" id="val-distance">-- cm</div>
+        
+        <div class="label" style="margin-top: 10px;">État</div>
+        <div class="value" id="val-flame">✓ NORMAL</div>
+    </div>
+    
+    <!-- WIDGET: SYSTÈME RASPBERRY PI -->
+    <div id="system-info" class="widget">
+        <div class="label">═══ SYSTÈME ═══</div>
+        <hr>
+        
+        <div><span class="label">CPU</span> <span id="val-cpu">--</span>%</div>
+        <div><span class="label">RAM</span> <span id="val-ram">--</span>%</div>
+        <div><span class="label">DISQUE</span> <span id="val-disk">--</span>%</div>
+        <div><span class="label">TEMP RPi</span> <span id="val-rpi-temp">--</span>°C</div>
+        
+        <hr>
+        <div><span class="label">Uptime</span> <span id="val-uptime">--</span></div>
+    </div>
+    
+    <!-- WIDGET: ALERTES -->
+    <div id="alerts" class="widget">
+        <div class="label">═══ ALERTES ═══</div>
+        <div id="alert-list" style="margin-top: 8px; max-height: 180px; overflow-y: auto;"></div>
+    </div>
+    
+    <!-- WIDGET: CONSOLE -->
+    <div id="console" class="widget">
+        <div class="label">═══ LOGS ═══</div>
+        <div id="console-output"></div>
+    </div>
+    
+    <!-- BARRE DE STATUS -->
+    <div id="status-bar">
+        <span>S.H.O.S HUD | Profil: <strong>{{ profile.name }}</strong></span>
+        <span>Socket.IO: <span id="socket-status">DÉCONNECTÉ</span> | Capteurs: <span id="hardware-status" style="color: #ff0000;">OFFLINE</span></span>
+    </div>
+    
+</div>
+
+<!-- ============================================================ -->
+<!-- SCRIPT JAVASCRIPT                                            -->
+<!-- ============================================================ -->
+<script>
+    // === CONFIGURATION ===
+    const MAX_CONSOLE_LINES = 50;
+    const GAS_ALERT_THRESHOLD = 400;
+    const TEMP_ALERT_THRESHOLD = 50;
+    const DISTANCE_ALERT_THRESHOLD = 30;
+    
+    // === VARIABLES GLOBALES ===
+    let consoleLines = [];
+    let lastSensorUpdate = 0;
+    
+    // === LOGGING CUSTOM ===
+    function addLog(message, type = 'info') {
+        const now = new Date().toLocaleTimeString('fr-FR');
+        const line = `[${now}] ${message}`;
+        consoleLines.push({ text: line, type });
+        
+        if (consoleLines.length > MAX_CONSOLE_LINES) {
+            consoleLines.shift();
+        }
+        
+        updateConsoleDisplay();
+    }
+    
+    function updateConsoleDisplay() {
+        const output = document.getElementById('console-output');
+        output.innerHTML = consoleLines
+            .map(line => {
+                const className = `console-line console-${line.type}`;
+                return `<div class="${className}">${escapeHtml(line.text)}</div>`;
+            })
+            .join('');
+        output.scrollTop = output.scrollHeight;
+    }
+    
+    function escapeHtml(text) {
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.replace(/[&<>"']/g, m => map[m]);
+    }
+    
+    // === CONNEXION SOCKET.IO ===
+    const socket = io();
+    const statusSpan = document.getElementById('socket-status');
+    const hardwareSpan = document.getElementById('hardware-status');
+    
+    socket.on('connect', () => {
+        statusSpan.textContent = '🔗 CONNECTÉ';
+        statusSpan.classList.add('connected');
+        addLog('✅ Connecté au serveur S.H.O.S', 'info');
+    });
+    
+    socket.on('disconnect', () => {
+        statusSpan.textContent = '✗ DÉCONNECTÉ';
+        statusSpan.classList.remove('connected');
+        addLog('❌ Perte de connexion avec le serveur', 'error');
+    });
+    
+    socket.on('connection_response', (data) => {
+        addLog(data.data, 'info');
+    });
+    
+    // === RÉCEPTION DES DONNÉES CAPTEURS ===
+    socket.on('sensor_update', (data) => {
+        lastSensorUpdate = Date.now();
+        hardwareSpan.textContent = '✓ ONLINE';
+        hardwareSpan.style.color = '#00ff00';
+        
+        addLog(`📡 Données reçues: T=${data.temperature}°C, H=${data.humidity}%, G=${data.gas}ppm`, 'info');
+        
+        // === AFFICHAGE TEMPÉRATURE ===
+        const tempElement = document.getElementById('val-temp');
+        tempElement.textContent = (data.temperature !== null && data.temperature !== undefined)
+            ? data.temperature.toFixed(1) + '°C'
+            : '--°C';
+        
+        if (data.temperature > TEMP_ALERT_THRESHOLD) {
+            tempElement.classList.add('alert');
+            addLog(`⚠️  Température élevée: ${data.temperature}°C`, 'warning');
+        } else {
+            tempElement.classList.remove('alert');
+        }
+        
+        // === AFFICHAGE HUMIDITÉ ===
+        const humidityElement = document.getElementById('val-humidity');
+        humidityElement.textContent = (data.humidity !== null && data.humidity !== undefined)
+            ? data.humidity.toFixed(0) + '%'
+            : '--%';
+        
+        // === AFFICHAGE GAZ ===
+        const gasElement = document.getElementById('val-gas');
+        gasElement.textContent = (data.gas !== null && data.gas !== undefined)
+            ? data.gas.toFixed(0)
+            : '--';
+        
+        const telemetryWidget = document.getElementById('telemetry');
+        if (data.gas > GAS_ALERT_THRESHOLD) {
+            gasElement.classList.add('alert');
+            telemetryWidget.classList.add('alert');
+            addLog(`🚨 ALERTE: Niveau de gaz critique (${data.gas} ppm)`, 'error');
+        } else {
+            gasElement.classList.remove('alert');
+            if (data.flame !== 1) telemetryWidget.classList.remove('alert');
+        }
+        
+        // === AFFICHAGE DISTANCE ===
+        const distanceElement = document.getElementById('val-distance');
+        if (data.distance !== null && data.distance !== undefined) {
+            distanceElement.textContent = data.distance.toFixed(0) + ' cm';
+            
+            if (data.distance < DISTANCE_ALERT_THRESHOLD) {
+                distanceElement.classList.add('alert');
+                addLog(`⚠️  Proximité détectée: ${data.distance} cm`, 'warning');
+            } else {
+                distanceElement.classList.remove('alert');
+            }
+        } else {
+            distanceElement.textContent = '-- cm';
+            distanceElement.classList.remove('alert');
+        }
+        
+        // === AFFICHAGE FLAMME/FUMÉE ===
+        const flameElement = document.getElementById('val-flame');
+        if (data.flame === 1) {
+            flameElement.textContent = '🔥 FLAMME !';
+            flameElement.classList.add('alert');
+            telemetryWidget.classList.add('alert');
+            addLog('🚨 ALERTE CRITIQUE: Flamme détectée !', 'error');
+        } else {
+            flameElement.textContent = '✓ NORMAL';
+            flameElement.classList.remove('alert');
+        }
+    });
+    
+    // === RÉCEPTION DES DONNÉES SYSTÈME ===
+    socket.on('sys_update', (data) => {
+        document.getElementById('val-cpu').textContent = data.cpu.toFixed(1);
+        document.getElementById('val-ram').textContent = data.ram.toFixed(1);
+        document.getElementById('val-disk').textContent = data.disk.toFixed(1);
+        document.getElementById('val-rpi-temp').textContent = data.temp.toFixed(1);
+        
+        // Uptime en format lisible
+        const uptime = Math.floor(data.uptime);
+        const hours = Math.floor(uptime / 3600);
+        const minutes = Math.floor((uptime % 3600) / 60);
+        document.getElementById('val-uptime').textContent = `${hours}h ${minutes}m`;
+    });
+    
+    // === ALERTES ===
+    socket.on('alert_critical', (alert) => {
+        addLog(`🚨 CRITIQUE: ${alert.message}`, 'error');
+        showAlert(alert, 'critical');
+    });
+    
+    socket.on('alert_warning', (alert) => {
+        addLog(`⚠️  AVERTISSEMENT: ${alert.message}`, 'warning');
+        showAlert(alert, 'warning');
+    });
+    
+    function showAlert(alert, severity) {
+        const alertList = document.getElementById('alert-list');
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert-item alert-${severity}`;
+        alertDiv.style.cssText = `
+            padding: 6px;
+            margin: 4px 0;
+            border: 1px solid ${severity === 'critical' ? '#ff3636' : '#ff9500'};
+            border-radius: 2px;
+            background: ${severity === 'critical' ? 'rgba(255,54,54,0.2)' : 'rgba(255,149,0,0.2)'};
+            color: ${severity === 'critical' ? '#ff3636' : '#ff9500'};
+            font-size: 0.85em;
+        `;
+        alertDiv.textContent = `[${new Date().toLocaleTimeString('fr-FR')}] ${alert.message}`;
+        
+        alertList.insertBefore(alertDiv, alertList.firstChild);
+        
+        // Supprimer après 10 secondes
+        setTimeout(() => alertDiv.remove(), 10000);
+    }
+    
+    socket.on('system_status', (data) => {
+        addLog(`📊 Status système: ${data.status}`, 'info');
+    });
+    
+    // === WATCHDOG: Détection de déconnexion hardware ===
+    setInterval(() => {
+        const timeSinceLastUpdate = Date.now() - lastSensorUpdate;
+        
+        if (timeSinceLastUpdate > 10000 && lastSensorUpdate > 0) {
+            hardwareSpan.textContent = '✗ OFFLINE';
+            hardwareSpan.style.color = '#ff3636';
+            addLog('❌ Perte de connexion avec l\'Arduino', 'error');
+        }
+    }, 5000);
+    
+    // === INITIALISATION ===
+    addLog('🚀 S.H.O.S HUD initialisé', 'info');
+    addLog('⏳ En attente des données...', 'info');
+    
+    // Logs de débogage
+    console.log('%c[S.H.O.S HUD]', 'color: #00d4ff; font-weight: bold; font-size: 14px;', 'Interface chargée et prête');
+</script>
+
+</body>
+</html>

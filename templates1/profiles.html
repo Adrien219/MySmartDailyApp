@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profils - S.H.O.S</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://code.jquery.com/ui/1.13.0/jquery-ui.min.js"></script>
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.0/themes/base/jquery-ui.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #0a0e27 0%, #16213e 50%, #0a0e27 100%);
+            color: #00ff88;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .header {
+            max-width: 1400px;
+            margin: 0 auto 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #00ff88;
+            padding-bottom: 20px;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            background: linear-gradient(135deg, #00ff88, #00b4ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .back-link {
+            color: #00b4ff;
+            text-decoration: none;
+            padding: 10px 20px;
+            border: 1px solid #00b4ff;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .back-link:hover {
+            background: rgba(0, 180, 255, 0.1);
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #00ff88, #00b4ff);
+            color: #0a0e27;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            transition: all 0.3s;
+            font-size: 1rem;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 255, 136, 0.3);
+        }
+
+        .btn.danger {
+            background: linear-gradient(135deg, #ff6666, #ff9999);
+        }
+
+        .profiles-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .profile-card {
+            background: rgba(20, 50, 80, 0.4);
+            backdrop-filter: blur(20px);
+            border: 2px solid #00ff88;
+            border-radius: 10px;
+            padding: 20px;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .profile-card:hover {
+            box-shadow: 0 0 30px rgba(0, 255, 136, 0.3);
+            border-color: #00b4ff;
+            transform: translateY(-5px);
+        }
+
+        .profile-card.selected {
+            border-color: #00ff88;
+            background: rgba(20, 50, 80, 0.6);
+            box-shadow: 0 0 30px rgba(0, 255, 136, 0.5);
+        }
+
+        .profile-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            border-bottom: 1px solid rgba(0, 255, 136, 0.3);
+            padding-bottom: 15px;
+        }
+
+        .profile-icon {
+            font-size: 2rem;
+            margin-right: 10px;
+        }
+
+        .profile-info {
+            flex: 1;
+        }
+
+        .profile-name {
+            font-size: 1.3rem;
+            color: #00ff88;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .profile-description {
+            font-size: 0.85rem;
+            color: #00b4ff;
+            opacity: 0.8;
+            margin-top: 5px;
+        }
+
+        .profile-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 15px;
+        }
+
+        .profile-btn {
+            background: rgba(0, 255, 136, 0.2);
+            border: 1px solid #00ff88;
+            color: #00ff88;
+            padding: 6px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.3s;
+        }
+
+        .profile-btn:hover {
+            background: rgba(0, 255, 136, 0.4);
+        }
+
+        .profile-btn.delete {
+            background: rgba(255, 100, 100, 0.2);
+            border-color: #ff6666;
+            color: #ff6666;
+        }
+
+        .profile-btn.delete:hover {
+            background: rgba(255, 100, 100, 0.4);
+        }
+
+        .profile-content {
+            font-size: 0.9rem;
+            color: #00b4ff;
+            line-height: 1.6;
+        }
+
+        .profile-modules {
+            margin: 15px 0;
+            padding: 10px;
+            background: rgba(0, 50, 80, 0.3);
+            border-radius: 5px;
+            border-left: 3px solid #00ff88;
+        }
+
+        .module-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+            font-size: 0.85rem;
+        }
+
+        .module-status {
+            color: #00ff88;
+        }
+
+        .module-status.disabled {
+            color: #ff6666;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: rgba(20, 50, 80, 0.95);
+            border: 2px solid #00ff88;
+            border-radius: 10px;
+            padding: 30px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            color: #00ff88;
+        }
+
+        .modal-header {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #00ff88;
+            padding-bottom: 15px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            color: #00ff88;
+            font-weight: bold;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #00ff88;
+            background: rgba(0, 50, 80, 0.5);
+            color: #00ff88;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 1rem;
+        }
+
+        .form-input:focus {
+            outline: none;
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+        }
+
+        .form-input::placeholder {
+            color: rgba(0, 255, 136, 0.5);
+        }
+
+        .sensor-selector {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .sensor-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px;
+            background: rgba(0, 50, 80, 0.3);
+            border-radius: 5px;
+            cursor: pointer;
+            border: 1px solid rgba(0, 255, 136, 0.2);
+        }
+
+        .sensor-checkbox input {
+            cursor: pointer;
+        }
+
+        .drag-zone {
+            background: rgba(0, 50, 80, 0.3);
+            border: 2px dashed #00ff88;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            min-height: 150px;
+            text-align: center;
+            color: #00b4ff;
+        }
+
+        .drag-zone.drag-over {
+            background: rgba(0, 255, 136, 0.1);
+            border-color: #00b4ff;
+        }
+
+        .draggable-sensor {
+            display: inline-block;
+            background: rgba(0, 255, 136, 0.2);
+            border: 1px solid #00ff88;
+            padding: 8px 12px;
+            border-radius: 5px;
+            margin: 5px;
+            cursor: move;
+            color: #00ff88;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 30px;
+            justify-content: flex-end;
+        }
+
+        .modal-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+        }
+
+        .modal-btn.save {
+            background: linear-gradient(135deg, #00ff88, #00b4ff);
+            color: #0a0e27;
+        }
+
+        .modal-btn.cancel {
+            background: rgba(255, 100, 100, 0.2);
+            color: #ff6666;
+            border: 1px solid #ff6666;
+        }
+
+        .info-box {
+            background: rgba(0, 150, 100, 0.1);
+            border-left: 3px solid #00ff88;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 30px;
+            color: #00ff88;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>⚙️ Gestion des Profils</h1>
+        <a href="/" class="back-link">← Retour à l'accueil</a>
+    </div>
+
+    <div class="container">
+        <div class="info-box">
+            <strong>ℹ️ Créez des profils personnalisés avec drag-and-drop!</strong><br>
+            Sélectionnez les capteurs, définissez les seuils d'alerte, et sauvegardez vos configurations.
+        </div>
+
+        <div class="button-group">
+            <button class="btn" onclick="openCreateModal()">➕ Créer un Profil</button>
+            <button class="btn" onclick="loadProfiles()">🔄 Actualiser</button>
+        </div>
+
+        <div class="profiles-grid" id="profiles-grid"></div>
+    </div>
+
+    <!-- Modal Création/Édition -->
+    <div class="modal" id="profileModal">
+        <div class="modal-content">
+            <div class="modal-header" id="modalTitle">Créer un Profil</div>
+            
+            <form id="profileForm">
+                <div class="form-group">
+                    <label class="form-label">Nom du Profil</label>
+                    <input type="text" class="form-input" id="profileName" placeholder="Ex: Mon Profil Personnel" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Description</label>
+                    <input type="text" class="form-input" id="profileDesc" placeholder="Description courte">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">📍 Capteurs Actifs (Drag & Drop)</label>
+                    <div class="drag-zone" id="activeSensors">
+                        <p>Glissez les capteurs ici</p>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Sélectionnez les Capteurs</label>
+                    <div class="sensor-selector">
+                        <label class="sensor-checkbox">
+                            <input type="checkbox" value="temperature"> 🌡️ Température
+                        </label>
+                        <label class="sensor-checkbox">
+                            <input type="checkbox" value="humidity"> 💧 Humidité
+                        </label>
+                        <label class="sensor-checkbox">
+                            <input type="checkbox" value="gas"> ⚠️ Gaz
+                        </label>
+                        <label class="sensor-checkbox">
+                            <input type="checkbox" value="distance"> 📏 Distance
+                        </label>
+                        <label class="sensor-checkbox">
+                            <input type="checkbox" value="sound"> 🔊 Son
+                        </label>
+                        <label class="sensor-checkbox">
+                            <input type="checkbox" value="light"> 💡 Luminosité
+                        </label>
+                        <label class="sensor-checkbox">
+                            <input type="checkbox" value="esp32"> 🎥 ESP32 Camera
+                        </label>
+                        <label class="sensor-checkbox">
+                            <input type="checkbox" value="mobile"> 📱 Mobile GPS
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Seuils d'Alerte</label>
+                    <div style="padding: 10px; background: rgba(0, 50, 80, 0.3); border-radius: 5px;">
+                        <div style="margin: 10px 0;">
+                            <label>Température Max (°C)</label>
+                            <input type="number" class="form-input" id="tempThreshold" value="50" style="width: 100px;">
+                        </div>
+                        <div style="margin: 10px 0;">
+                            <label>Humidité Max (%)</label>
+                            <input type="number" class="form-input" id="humidityThreshold" value="80" style="width: 100px;">
+                        </div>
+                        <div style="margin: 10px 0;">
+                            <label>Gaz Max (ppm)</label>
+                            <input type="number" class="form-input" id="gasThreshold" value="400" style="width: 100px;">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-buttons">
+                    <button type="button" class="modal-btn cancel" onclick="closeModal()">Annuler</button>
+                    <button type="submit" class="modal-btn save">💾 Sauvegarder</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let currentEditingProfile = null;
+        let profiles = {};
+
+        // Charger les profils au démarrage
+        loadProfiles();
+
+        function loadProfiles() {
+            fetch('/api/profiles')
+                .then(res => res.json())
+                .then(data => {
+                    profiles = data;
+                    renderProfiles();
+                })
+                .catch(err => console.error('Erreur:', err));
+        }
+
+        function renderProfiles() {
+            const grid = document.getElementById('profiles-grid');
+            grid.innerHTML = '';
+
+            Object.entries(profiles).forEach(([id, profile]) => {
+                const card = document.createElement('div');
+                card.className = 'profile-card';
+                card.innerHTML = `
+                    <div class="profile-header">
+                        <div style="display: flex; align-items: center;">
+                            <span class="profile-icon">${profile.icon || '⚙️'}</span>
+                            <div class="profile-info">
+                                <div class="profile-name">${profile.name || 'Sans nom'}</div>
+                                <div class="profile-description">${profile.description || ''}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="profile-content">
+                        <div class="profile-modules">
+                            <strong>Capteurs:</strong>
+                            ${renderSensors(profile)}
+                        </div>
+                        <div style="margin-top: 10px;">
+                            <strong>Seuils:</strong><br>
+                            Temp: ${profile.sensors?.temperature?.threshold || '--'}°C<br>
+                            Humidité: ${profile.sensors?.humidity?.threshold || '--'}%<br>
+                            Gaz: ${profile.sensors?.gas?.threshold || '--'}ppm
+                        </div>
+                    </div>
+                    <div class="profile-actions">
+                        <button class="profile-btn" onclick="editProfile('${id}')">✏️ Éditer</button>
+                        <button class="profile-btn" onclick="duplicateProfile('${id}')">📋 Dupliquer</button>
+                        <button class="profile-btn delete" onclick="deleteProfile('${id}')">🗑️ Supprimer</button>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function renderSensors(profile) {
+            const sensors = profile.sensors || {};
+            return Object.entries(sensors)
+                .filter(([_, config]) => config.enabled)
+                .map(([name]) => `<span style="color: #00ff88;">✓</span> ${name}`)
+                .join('<br>')
+                || '<span style="color: #ff6666;">Aucun capteur</span>';
+        }
+
+        function openCreateModal() {
+            currentEditingProfile = null;
+            document.getElementById('modalTitle').textContent = 'Créer un Profil';
+            document.getElementById('profileForm').reset();
+            document.getElementById('profileModal').classList.add('active');
+        }
+
+        function editProfile(profileId) {
+            currentEditingProfile = profileId;
+            const profile = profiles[profileId];
+            
+            document.getElementById('modalTitle').textContent = 'Éditer un Profil';
+            document.getElementById('profileName').value = profile.name || '';
+            document.getElementById('profileDesc').value = profile.description || '';
+            document.getElementById('tempThreshold').value = profile.sensors?.temperature?.threshold || 50;
+            document.getElementById('humidityThreshold').value = profile.sensors?.humidity?.threshold || 80;
+            document.getElementById('gasThreshold').value = profile.sensors?.gas?.threshold || 400;
+            
+            document.getElementById('profileModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('profileModal').classList.remove('active');
+            currentEditingProfile = null;
+        }
+
+        function deleteProfile(profileId) {
+            if (confirm('Êtes-vous sûr de vouloir supprimer ce profil?')) {
+                socket.emit('delete_profile', { id: profileId });
+                delete profiles[profileId];
+                renderProfiles();
+            }
+        }
+
+        function duplicateProfile(profileId) {
+            const profile = profiles[profileId];
+            const newId = 'profile_' + Date.now();
+            profiles[newId] = {
+                ...profile,
+                name: profile.name + ' (copie)'
+            };
+            socket.emit('create_profile', { id: newId, ...profiles[newId] });
+            renderProfiles();
+        }
+
+        document.getElementById('profileForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+
+            const profileData = {
+                id: currentEditingProfile || 'profile_' + Date.now(),
+                name: document.getElementById('profileName').value,
+                description: document.getElementById('profileDesc').value,
+                sensors: {
+                    temperature: { enabled: true, threshold: parseFloat(document.getElementById('tempThreshold').value) },
+                    humidity: { enabled: true, threshold: parseFloat(document.getElementById('humidityThreshold').value) },
+                    gas: { enabled: true, threshold: parseFloat(document.getElementById('gasThreshold').value) }
+                }
+            };
+
+            if (currentEditingProfile) {
+                socket.emit('update_profile', { id: currentEditingProfile, updates: profileData });
+            } else {
+                socket.emit('create_profile', profileData);
+            }
+
+            profiles[profileData.id] = profileData;
+            renderProfiles();
+            closeModal();
+        });
+
+        socket.on('profile_created', () => loadProfiles());
+        socket.on('profile_updated', () => loadProfiles());
+        socket.on('profile_deleted', () => loadProfiles());
+    </script>
+</body>
+</html>

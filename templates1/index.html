@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>S.H.O.S FINAL - Accueil</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #0a0e27 0%, #16213e 50%, #0a0e27 100%);
+            color: #00ff88;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .header {
+            margin-bottom: 50px;
+        }
+
+        .logo {
+            font-size: 80px;
+            margin-bottom: 20px;
+            animation: float 3s infinite ease-in-out;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            background: linear-gradient(135deg, #00ff88 0%, #00b4ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+            text-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+        }
+
+        .subtitle {
+            color: #00b4ff;
+            font-size: 1.2rem;
+            margin-bottom: 30px;
+            opacity: 0.9;
+        }
+
+        .status-line {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 50px;
+            font-size: 0.9rem;
+            flex-wrap: wrap;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            padding: 10px 20px;
+            border-radius: 8px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ff6666;
+            animation: blink 1s infinite;
+        }
+
+        .status-dot.connected {
+            background: #00ff88;
+            animation: none;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .menu {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            margin-bottom: 40px;
+        }
+
+        .menu-item {
+            background: rgba(20, 50, 80, 0.4);
+            backdrop-filter: blur(20px);
+            border: 2px solid #00ff88;
+            border-radius: 15px;
+            padding: 30px 20px;
+            text-decoration: none;
+            color: #00ff88;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .menu-item:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 10px 40px rgba(0, 255, 136, 0.3);
+            border-color: #00b4ff;
+            background: rgba(20, 50, 80, 0.6);
+        }
+
+        .menu-item-icon {
+            font-size: 3rem;
+            display: block;
+        }
+
+        .menu-item-title {
+            font-size: 1.3rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .menu-item-desc {
+            font-size: 0.85rem;
+            color: #00b4ff;
+            opacity: 0.8;
+        }
+
+        .footer {
+            margin-top: 60px;
+            padding-top: 30px;
+            border-top: 1px solid rgba(0, 255, 136, 0.2);
+            color: #00b4ff;
+            font-size: 0.9rem;
+        }
+
+        .version {
+            color: #00ff88;
+            font-weight: bold;
+        }
+
+        @media (max-width: 768px) {
+            h1 { font-size: 2rem; }
+            .logo { font-size: 50px; }
+            .menu { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">⚡</div>
+            <h1>S.H.O.S FINAL</h1>
+            <p class="subtitle">Système de Surveillance Intelligent Complet</p>
+            
+            <div class="status-line">
+                <div class="status-item">
+                    <span class="status-dot connected" id="mqtt-status"></span>
+                    <span id="mqtt-text">MQTT: Vérification...</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-dot connected" id="flask-status"></span>
+                    <span id="flask-text">Flask: En ligne</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-dot" id="arduino-status"></span>
+                    <span id="arduino-text">Arduino: Vérification...</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="menu">
+            <a href="/dashboard" class="menu-item">
+                <span class="menu-item-icon">📊</span>
+                <span class="menu-item-title">Dashboard</span>
+                <span class="menu-item-desc">Affichage temps réel de tous les capteurs</span>
+            </a>
+
+            <a href="/profiles" class="menu-item">
+                <span class="menu-item-icon">⚙️</span>
+                <span class="menu-item-title">Profils</span>
+                <span class="menu-item-desc">Créer & gérer vos profils personnalisés</span>
+            </a>
+
+            <a href="/diagnostic" class="menu-item">
+                <span class="menu-item-icon">🔧</span>
+                <span class="menu-item-title">Diagnostic</span>
+                <span class="menu-item-desc">Monitoring système complet en temps réel</span>
+            </a>
+
+            <a href="/mobile" class="menu-item">
+                <span class="menu-item-icon">📱</span>
+                <span class="menu-item-title">Mobile</span>
+                <span class="menu-item-desc">Capteurs de votre téléphone</span>
+            </a>
+
+            <a href="/esp32_cam" class="menu-item">
+                <span class="menu-item-icon">🎥</span>
+                <span class="menu-item-title">ESP32 CAM</span>
+                <span class="menu-item-desc">Streaming vidéo et reconnaissance faciale</span>
+            </a>
+
+            <a href="/settings" class="menu-item">
+                <span class="menu-item-icon">⚙️</span>
+                <span class="menu-item-title">Paramètres</span>
+                <span class="menu-item-desc">Configuration système et préférences</span>
+            </a>
+        </div>
+
+        <div class="footer">
+            <p><span class="version">S.H.O.S V3.0 FINAL</span> | Version complète avec tous les capteurs</p>
+            <p style="margin-top: 10px; font-size: 0.8rem; opacity: 0.7;">
+                Reconnaissance Faciale • Profils Personnalisés • Diagnostic Temps Réel • Capteurs Téléphone
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+
+        socket.on('connect', () => {
+            document.getElementById('flask-status').classList.add('connected');
+            document.getElementById('flask-text').textContent = 'Flask: En ligne';
+        });
+
+        socket.on('disconnect', () => {
+            document.getElementById('flask-status').classList.remove('connected');
+            document.getElementById('flask-text').textContent = 'Flask: Déconnecté';
+        });
+
+        socket.on('mqtt_status', (data) => {
+            const elem = document.getElementById('mqtt-status');
+            const text = document.getElementById('mqtt-text');
+            if (data.connected) {
+                elem.classList.add('connected');
+                text.textContent = 'MQTT: Connecté';
+            } else {
+                elem.classList.remove('connected');
+                text.textContent = 'MQTT: Déconnecté';
+            }
+        });
+
+        socket.on('arduino_status', (data) => {
+            const elem = document.getElementById('arduino-status');
+            const text = document.getElementById('arduino-text');
+            if (data.connected) {
+                elem.classList.add('connected');
+                text.textContent = 'Arduino: Connecté';
+            } else {
+                elem.classList.remove('connected');
+                text.textContent = 'Arduino: Déconnecté';
+            }
+        });
+
+        // Demander le statut au serveur
+        socket.emit('request_status');
+    </script>
+</body>
+</html>
