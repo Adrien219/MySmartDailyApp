@@ -1,12 +1,19 @@
 import eventlet
 eventlet.monkey_patch()
 
-import sys, os, time, json, logging, psutil, threading
+import sys, os, time, json, logging, psutil, threading, cv2
 from flask import Flask, render_template, Response, jsonify, request
 from flask_socketio import SocketIO, emit
 from paho.mqtt import client as mqtt_client
 from datetime import datetime
 from pathlib import Path
+
+# Tentative d'import du module de gestes
+try:
+    from modules.hand_gesture import HandController
+except ImportError:
+    class HandController:
+        def get_gesture(self, frame): return "NONE", frame
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger("S.H.O.S_FINAL")
@@ -19,8 +26,92 @@ mqtt_connected = False
 last_sensor_data = {}
 last_esp32_data = {}
 last_mobile_data = {}
-last_frame = None
+last_frame = None       # Pour l'ESP32-CAM
+last_frame_pi = None    # Pour la Caméra Raspberry (Gestes)
+current_gesture = "NONE"
 connected_clients = 0
+
+# Configuration des Snapshots
+SNAPSHOT_FOLDER = Path(__name__).parent / 'data' / 'snapshots'
+if not SNAPSHOT_FOLDER.exists(): SNAPSHOT_FOLDER.mkdir(parents=True, exist_ok=True)
+
+# ============================================================================
+# GESTURE ENGINE (PI CAMERA)
+# ============================================================================
+
+def gesture_recognition_task():
+    """Analyse la caméra locale via GStreamer pour Raspberry Pi."""
+    global last_frame_pi, current_gesture
+    logger.info("🚀 Moteur de gestes S.H.O.S activé")
+    
+    detector = HandController()
+    
+    # Pipeline GStreamer spécifique pour libcamera sur Raspberry Pi
+    pipeline = (
+        "libcamerasrc ! video/x-raw, width=640, height=480, framerate=30/1 ! "
+        "videoconvert ! appsink"
+    )
+    
+    # On tente GStreamer, si échec on revient au mode classique (V4L2)
+    cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
+    if not cap.isOpened():
+        logger.warning("⚠️ GStreamer non dispo, bascule sur V4L2 (/dev/video0)")
+        cap = cv2.VideoCapture(0)
+    
+    while True:
+        ret, frame = cap.read()
+        if not ret or frame is None:
+            eventlet.sleep(0.1)
+            continue
+            
+        # Détection des gestes
+        gesture, processed_frame = detector.get_gesture(frame)
+        
+        # Emission si le geste change
+        if gesture != "NONE" and gesture != current_gesture:
+            current_gesture = gesture
+            logger.info(f"🖐️ Geste détecté : {gesture}")
+            socketio.emit('gesture_event', {'gesture': gesture})
+            
+            # --- CORRECTION : Enregistrement photo sur Geste "Salut" (Moteur démarré) ---
+            if gesture == "SYSTEM_START":
+                save_snapshot(processed_frame)
+
+            handle_gesture_logic(gesture)
+
+        # Encodage pour le flux vidéo (Dashboard/Diagnostic)
+        _, buffer = cv2.imencode('.jpg', processed_frame)
+        last_frame_pi = buffer.tobytes()
+        
+        eventlet.sleep(0.01)
+
+# ============================================================================
+# PLUGINS (Actions)
+# ============================================================================
+
+def handle_gesture_logic(gesture):
+    """Logique de déclenchement des plugins système."""
+    if gesture == "TRIGGER_ANALYSE":
+        logger.info("🧠 Plugin : Analyse Florence-2 demandée")
+    elif gesture == "READ_TEXT":
+        logger.info("📖 Plugin : Lecture OCR demandée")
+    elif gesture == "SYSTEM_STOP":
+        logger.info("🛑 Plugin : Arrêt d'urgence/Veille")
+
+def save_snapshot(frame):
+    """Plugin : Enregistre une photo avec un texte d'état."""
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    filename = f"shos_greet_{timestamp}.jpg"
+    filepath = SNAPSHOT_FOLDER / filename
+    
+    # Ajout du texte d'état sur l'image
+    text = f"S.H.O.S GREETING - {timestamp}"
+    cv2.putText(frame, text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2, cv2.LINE_AA)
+    
+    # Enregistrement
+    cv2.imwrite(str(filepath), frame)
+    logger.info(f"📸 Photo enregistrée : {filename}")
+    socketio.emit('alert_warning', {'data': f"📸 Salut capturé : {filename}"})
 
 # ============================================================================
 # MQTT CLIENT
@@ -74,102 +165,52 @@ class MQTTHandler:
     
     def _on_message(self, client, userdata, msg):
         global last_sensor_data, last_esp32_data, last_mobile_data
-        
         try:
+            payload = json.loads(msg.payload.decode('utf-8'))
             if msg.topic == "shos/sensors/normalized":
-                data = json.loads(msg.payload.decode('utf-8'))
-                last_sensor_data = data
-                socketio.emit('sensor_update', data)
-            
+                last_sensor_data = payload
+                socketio.emit('sensor_update', payload)
             elif msg.topic == "shos/sensors/esp32":
-                data = json.loads(msg.payload.decode('utf-8'))
-                last_esp32_data = data
-                socketio.emit('esp32_update', data)
-            
+                last_esp32_data = payload
+                socketio.emit('esp32_update', payload)
             elif msg.topic == "shos/sensors/mobile":
-                data = json.loads(msg.payload.decode('utf-8'))
-                last_mobile_data = data
-                socketio.emit('mobile_update', data)
-            
+                last_mobile_data = payload
+                socketio.emit('mobile_update', payload)
             elif "alert" in msg.topic:
-                alert = json.loads(msg.payload.decode('utf-8'))
-                if "critical" in msg.topic:
-                    socketio.emit('alert_critical', alert)
-                else:
-                    socketio.emit('alert_warning', alert)
+                socketio.emit('alert_critical' if "critical" in msg.topic else 'alert_warning', payload)
         except Exception as e:
-            logger.error(f"❌ Erreur MQTT: {e}")
+            logger.error(f"❌ Erreur parsing MQTT: {e}")
 
 mqtt_handler = MQTTHandler()
 
 # ============================================================================
-# ROUTES
+# ROUTES & VIDEO STREAMING
 # ============================================================================
 
 @app.route('/')
-def home():
-    return render_template('index.html')
+def home(): return render_template('index.html')
 
 @app.route('/dashboard')
-def dashboard():
-    return render_template('dashboard.html')
-
-@app.route('/profiles')
-def profiles():
-    return render_template('profiles.html')
+def dashboard(): return render_template('dashboard.html')
 
 @app.route('/diagnostic')
-def diagnostic():
-    return render_template('diagnostic.html')
+def diagnostic(): return render_template('diagnostic.html')
 
-@app.route('/mobile')
-def mobile():
-    return render_template('mobile.html')
-
-@app.route('/esp32_cam')
-def esp32_cam():
-    return render_template('esp32_cam.html')
-
-@app.route('/settings')
-def settings():
-    return render_template('settings.html')
-
-@app.route('/api/profiles')
-def api_profiles():
-    profiles_file = Path(__file__).parent / 'data' / 'profiles.json'
-    if profiles_file.exists():
-        with open(profiles_file) as f:
-            return jsonify(json.load(f))
-    return jsonify({})
-
-@app.route('/api/sensors/latest')
-def api_sensors():
-    return jsonify({
-        'arduino': last_sensor_data,
-        'esp32': last_esp32_data,
-        'mobile': last_mobile_data
-    })
-
-@app.route('/api/system/status')
-def api_status():
-    return jsonify({
-        'mqtt': mqtt_handler.connected,
-        'clients': connected_clients,
-        'timestamp': time.time()
-    })
+def stream_generator(source_attr):
+    """Générateur générique pour les flux vidéo."""
+    while True:
+        frame = globals().get(source_attr)
+        if frame:
+            yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+        eventlet.sleep(0.04)
 
 @app.route('/video_feed')
 def video_feed():
-    def gen_frames():
-        global last_frame
-        while True:
-            if last_frame:
-                yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n' 
-                       b'Content-Length: ' + str(len(last_frame)).encode() + b'\r\n\r\n' 
-                       + last_frame + b'\r\n')
-            eventlet.sleep(0.04)
-    
-    return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+    return Response(stream_generator('last_frame'), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/video_feed_pi')
+def video_feed_pi():
+    return Response(stream_generator('last_frame_pi'), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 # ============================================================================
 # SOCKET.IO EVENTS
@@ -180,7 +221,6 @@ def handle_connect():
     global connected_clients
     connected_clients += 1
     logger.info(f"✅ Client connecté (Total: {connected_clients})")
-    socketio.start_background_task(background_monitor)
     emit('connection_response', {'data': 'Connecté à S.H.O.S V3'})
 
 @socketio.on('disconnect')
@@ -188,47 +228,21 @@ def handle_disconnect():
     global connected_clients
     connected_clients = max(0, connected_clients - 1)
 
-@socketio.on('request_data')
-def handle_request_data():
-    emit('sensor_data_response', {
-        'sensors': last_sensor_data,
-        'esp32': last_esp32_data,
-        'mobile': last_mobile_data
-    })
-
-@socketio.on('request_status')
-def handle_request_status():
-    emit('mqtt_status', {'connected': mqtt_handler.connected})
-
-@socketio.on('ping')
-def handle_ping():
-    emit('pong')
-
 # ============================================================================
-# MONITORING
+# MONITORING SYSTEME
 # ============================================================================
 
 def background_monitor():
     while True:
         try:
-            cpu = psutil.cpu_percent(interval=1)
+            cpu = psutil.cpu_percent()
             ram = psutil.virtual_memory().percent
-            disk = psutil.disk_usage('/').percent
-            
             temp = 0
             try:
                 with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
                     temp = round(int(f.read()) / 1000, 1)
-            except:
-                temp = 0
-            
-            socketio.emit('sys_update', {
-                'cpu': round(cpu, 1),
-                'ram': round(ram, 1),
-                'disk': round(disk, 1),
-                'temp': temp
-            })
-            
+            except: pass
+            socketio.emit('sys_update', {'cpu': cpu, 'ram': ram, 'temp': temp})
             socketio.sleep(2)
         except Exception as e:
             logger.error(f"❌ Erreur monitoring: {e}")
@@ -239,21 +253,10 @@ def background_monitor():
 # ============================================================================
 
 if __name__ == '__main__':
-    logger.info("""
-    ╔════════════════════════════════════╗
-    ║   S.H.O.S V3.0 FINAL - COMPLET    ║
-    ║                                    ║
-    ║  • Dashboard temps réel            ║
-    ║  • Gestion profils drag-drop       ║
-    ║  • Diagnostic 10 sections          ║
-    ║  • Capteurs téléphone              ║
-    ║  • Streaming ESP32                 ║
-    ║  • Reconnaissance faciale          ║
-    ║                                    ║
-    ╚════════════════════════════════════╝
-    """)
+    logger.info("🚀 S.H.O.S V3.0 FINAL - Démarrage du système")
     
-    logger.info("🌐 Interface: http://localhost:5000")
-    logger.info("Lancer avec: python3 app_final_complete.py")
+    # Lancement des threads de fond
+    socketio.start_background_task(background_monitor)
+    socketio.start_background_task(gesture_recognition_task)
     
     socketio.run(app, host='0.0.0.0', port=5000, debug=False)
