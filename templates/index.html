@@ -189,51 +189,53 @@
             </div>
         </div>
 
-        <div class="menu">
+       <div class="menu">
+            {% for id, mod in modules.items() %}
+            <a href="{{ mod.route }}" class="menu-item module-dynamic">
+                <span class="menu-item-icon">{{ mod.icon }}</span>
+                <span class="menu-item-title">{{ mod.name }}</span>
+                <span class="menu-item-desc">{{ mod.description }}</span>
+            </a>
+            {% endfor %}
+
+            <hr style="grid-column: 1/-1; border: 1px dashed rgba(0,255,136,0.2); margin: 10px 0;">
+
             <a href="/dashboard" class="menu-item">
                 <span class="menu-item-icon">📊</span>
                 <span class="menu-item-title">Dashboard</span>
-                <span class="menu-item-desc">Affichage temps réel de tous les capteurs</span>
+                <span class="menu-item-desc">Capteurs temps réel</span>
             </a>
 
-            <a href="/profiles" class="menu-item">
-                <span class="menu-item-icon">⚙️</span>
-                <span class="menu-item-title">Profils</span>
-                <span class="menu-item-desc">Créer & gérer vos profils personnalisés</span>
-            </a>
-
-            <a href="/diagnostic" class="menu-item">
-                <span class="menu-item-icon">🔧</span>
-                <span class="menu-item-title">Diagnostic</span>
-                <span class="menu-item-desc">Monitoring système complet en temps réel</span>
+            <a href="/profile_manager" class="menu-item">
+                <span class="menu-item-icon">🆔</span>
+                <span class="menu-item-title">Gestionnaire</span>
+                <span class="menu-item-desc">Admin des profils</span>
             </a>
 
             <a href="/mobile" class="menu-item">
                 <span class="menu-item-icon">📱</span>
                 <span class="menu-item-title">Mobile</span>
-                <span class="menu-item-desc">Capteurs de votre téléphone</span>
+                <span class="menu-item-desc">Capteurs du téléphone</span>
             </a>
 
-            <a href="/esp32_cam" class="menu-item">
-                <span class="menu-item-icon">🎥</span>
-                <span class="menu-item-title">ESP32 CAM</span>
-                <span class="menu-item-desc">Streaming vidéo et reconnaissance faciale</span>
+            <a href="/diagnostic_ultimate" class="menu-item">
+                <span class="menu-item-icon">🚀</span>
+                <span class="menu-item-title">Diagnostic Pro</span>
+                <span class="menu-item-desc">Analyse profonde IA</span>
+            </a>
+
+            <a href="/hud" class="menu-item">
+                <span class="menu-item-icon">👓</span>
+                <span class="menu-item-title">Mode HUD</span>
+                <span class="menu-item-desc">Affichage tête haute</span>
             </a>
 
             <a href="/settings" class="menu-item">
                 <span class="menu-item-icon">⚙️</span>
                 <span class="menu-item-title">Paramètres</span>
-                <span class="menu-item-desc">Configuration système et préférences</span>
+                <span class="menu-item-desc">Configuration</span>
             </a>
         </div>
-
-        <div class="footer">
-            <p><span class="version">S.H.O.S V3.0 FINAL</span> | Version complète avec tous les capteurs</p>
-            <p style="margin-top: 10px; font-size: 0.8rem; opacity: 0.7;">
-                Reconnaissance Faciale • Profils Personnalisés • Diagnostic Temps Réel • Capteurs Téléphone
-            </p>
-        </div>
-    </div>
 
     <script>
         const socket = io();

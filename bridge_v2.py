@@ -40,6 +40,7 @@ class ArduinoBridge:
             )
             self.client.on_connect = self._on_connect
             self.client.on_disconnect = self._on_disconnect
+            self.client.on_message = self._on_message
             self.client.connect(self.broker, self.mqtt_port, 60)
             self.client.loop_start()
             print("✅ [MQTT] Client initialisé")
@@ -51,6 +52,12 @@ class ArduinoBridge:
         """Callback de connexion MQTT"""
         if rc == 0:
             self.connected_mqtt = True
+            
+            # S'abonner aux données du téléphone
+            client.subscribe("shos/sensors/mobile")
+            print("📡 [MQTT] Abonné au flux mobile")
+            
+            
             print("✅ [MQTT] Connecté au broker (localhost:1883)")
         else:
             print(f"❌ [MQTT] Erreur connexion (code {rc})")
@@ -59,6 +66,17 @@ class ArduinoBridge:
         """Callback de déconnexion MQTT"""
         self.connected_mqtt = False
         print(f"⚠️  [MQTT] Déconnecté (code {rc})")
+    
+    
+    def _on_message(self, client, userdata, msg):
+        """Reçoit du téléphone et renvoie vers le Web"""
+        try:
+            if msg.topic == "shos/sensors/mobile":
+                # On relaie la donnée telle quelle vers le dashboard
+                self.client.publish("shos/sensors/web", msg.payload)
+        except Exception as e:
+            print(f"⚠️ Erreur relais : {e}")
+    
     
     def detect_arduino_port(self):
         """

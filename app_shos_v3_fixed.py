@@ -1,16 +1,15 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 S.H.O.S V3.0 - Application Flask CORRIGÉE pour Raspberry Pi 4B
-Résout les problèmes de:
-  1. Flux vidéo libcamera (compatible avec Bullseye/Bookworm)
-  2. YOLOv8n intégré pour détection d'objets
-  3. Snapshots déclenchés par gestes
-  4. Gestion asynchrone robuste avec eventlet
+Modifications : 
+- Nettoyage des logs EngineIO/SocketIO
+- Correction de l'ordre d'initialisation (NameError: app)
 """
 
-import eventlet
-eventlet.monkey_patch()
+#import eventlet
+#eventlet.monkey_patch()
+
+import cv2
 
 import sys, os, time, json, logging, psutil, cv2
 from pathlib import Path
@@ -18,26 +17,79 @@ from datetime import datetime
 from threading import Lock, Event
 from queue import Queue, Empty
 import numpy as np
+import time
 
 from flask import Flask, render_template, Response, jsonify
 from flask_socketio import SocketIO, emit
 from paho.mqtt import client as mqtt_client
+from jinja2 import ChoiceLoader, FileSystemLoader
 
 # ============================================================================
 # CONFIGURATION LOGGING
 # ============================================================================
+logging.getLogger('socketio').setLevel(logging.ERROR)
+logging.getLogger('engineio').setLevel(logging.ERROR)
+
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%H:%M:%S'
 )
 logger = logging.getLogger("SHOS_V3.0")
 
 # ============================================================================
-# CONFIGURATION PATHS
+# INITIALISATION FLASK & CONFIGURATION MULTI-TEMPLATES
 # ============================================================================
 PROJECT_ROOT = Path(__file__).parent
+template_dir = PROJECT_ROOT / "templates"
+modules_dir = PROJECT_ROOT / "modules"
+
+app = Flask(__name__, template_folder=str(template_dir))
+app.config['SECRET_KEY'] = 'shos_secret_key_2026'
+
+# SOLUTION MASTER : On autorise Flask à chercher dans /templates ET dans /modules
+app.jinja_loader = ChoiceLoader([
+    FileSystemLoader(str(template_dir)),
+    FileSystemLoader(str(modules_dir))
+])
+
+socketio = SocketIO(
+    app, 
+    cors_allowed_origins="*", 
+    async_mode='eventlet', 
+    logger=False, 
+    engineio_logger=False
+)
+
+# ============================================================================
+# CONFIGURATION PATHS & MODULES DYNAMIQUES
+# ============================================================================
+# On définit SNAPSHOTS_DIR en majuscule pour que SnapshotManager le trouve
 SNAPSHOTS_DIR = PROJECT_ROOT / "data" / "snapshots"
 SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+
+# On garde aussi la version minuscule si ton code en a besoin ailleurs
+snapshots_dir = SNAPSHOTS_DIR 
+
+AVAILABLE_MODULES = {}
+
+def load_dynamic_modules():
+    global AVAILABLE_MODULES
+    if not modules_dir.exists():
+        modules_dir.mkdir()
+    
+    for folder in os.listdir(modules_dir):
+        config_file = modules_dir / folder / "config.json"
+        if config_file.exists():
+            try:
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    AVAILABLE_MODULES[folder] = config
+                    logger.info(f"📦 Module chargé : {config['name']}")
+            except Exception as e:
+                logger.error(f"❌ Erreur config {folder}: {e}")
+
+load_dynamic_modules()
 
 # ============================================================================
 # YOLOV8N - DÉTECTION D'OBJETS
@@ -219,14 +271,14 @@ class LibCameraCapture:
                     if self.error_count > self.max_errors:
                         logger.error("❌ Trop d'erreurs caméra, arrêt capture")
                         break
-                    eventlet.sleep(1)
+                    time.sleep(1)
                     continue
                 
                 ret, frame = self.cap.read()
                 
                 if not ret:
                     self.error_count += 1
-                    eventlet.sleep(0.1)
+                    time.sleep(0.1)
                     continue
                 
                 self.error_count = 0
@@ -446,10 +498,10 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB max
 
 socketio = SocketIO(
     app,
-    async_mode='eventlet',
+    async_mode='threading', # Change eventlet par threading
     cors_allowed_origins="*",
-    logger=True,
-    engineio_logger=True
+    logger=False,           # Mets sur False pour gagner en vitesse
+    engineio_logger=False   # Mets sur False
 )
 
 # Initialiser les modules
@@ -470,107 +522,164 @@ camera_stats = {"frames": 0, "errors": 0}
 
 
 # ============================================================================
-# ROUTES PRINCIPALES
+# GESTIONNAIRE MQTT (RE-AJOUTÉ)
 # ============================================================================
+# --- AJOUTE CE BLOC JUSTE AVANT TES ROUTES ---
+
+class MQTTHandler:
+    def __init__(self, host='localhost', port=1883):
+        self.host = host
+        self.port = port
+        # Version compatible avec ton installation
+        try:
+            self.client = mqtt_client.Client(mqtt_client.CallbackAPIVersion.VERSION2, "SHOS_V3_BRIDGE")
+        except:
+            self.client = mqtt_client.Client("SHOS_V3_BRIDGE")
+            
+        self.client.on_connect = self._on_connect
+        self.client.on_message = self._on_message
+        
+        try:
+            self.client.connect(self.host, self.port, 60)
+            self.client.loop_start()
+            print("📡 [MQTT] Pont MQTT-Web initialisé") # Utilise print pour être sûr de le voir
+        except Exception as e:
+            print(f"❌ [MQTT] Erreur de connexion: {e}")
+            
+    def _on_connect(self, client, userdata, flags, rc, properties=None):
+        print(f"✅ [MQTT] Connecté au Broker avec code {rc}")
+        client.subscribe([
+            ("shos/sensors/normalized", 1),
+            ("shos/sensors/mobile", 1),
+            ("shos/sensors/esp32", 1)
+        ])
+        
+    def _on_message(self, client, userdata, msg):
+            try:
+                # Décodage du JSON envoyé par le téléphone
+                payload = json.loads(msg.payload.decode('utf-8'))
+                
+                # CAS 1 : Données de l'Arduino (déjà là)
+                if msg.topic == "shos/sensors/normalized":
+                    socketio.emit('sensor_update', payload)
+                
+                # CAS 2 : Données du TÉLÉPHONE (Ajout/Vérification)
+                elif msg.topic == "shos/sensors/mobile":
+                    # On envoie un événement spécifique 'mobile_update'
+                    socketio.emit('mobile_update', payload)
+                    # Optionnel : log pour débugger au début
+                    # print(f"📲 [MOBILE] Accel: {payload.get('accel_x')}")
+
+                print(f"📥 [MQTT] Donnée reçue sur {msg.topic}")
+            except Exception as e:
+                print(f"❌ [MQTT] Erreur parsing sur {msg.topic}: {e}")
+
+# --- CETTE LIGNE EST LA PLUS IMPORTANTE ---
+mqtt_bridge = MQTTHandler()
+
+
+
+# ============================================================================
+# ROUTES PRINCIPALES (WEB UI)
+# ============================================================================
+
+# Profil par défaut
+DEFAULT_PROFILE = {'name': 'ADRIEN_ASUS', 'id': '01'}
 
 @app.route('/')
 def index():
-    """Page d'accueil"""
-    return render_template('index.html')
+    # On passe AVAILABLE_MODULES pour que l'accueil affiche les tuiles dynamiquement
+    return render_template('index.html', modules=AVAILABLE_MODULES, profile=DEFAULT_PROFILE)
 
+from flask import render_template_string
+
+@app.route('/module/<module_id>')
+def universal_module_route(module_id):
+    if module_id in AVAILABLE_MODULES:
+        config = AVAILABLE_MODULES[module_id]
+        # On construit le chemin ABSOLU vers le fichier
+        file_path = modules_dir / module_id / config.get('template', 'interface.html')
+        
+        if not file_path.exists():
+            logger.error(f"❌ Fichier manquant : {file_path}")
+            return f"Fichier introuvable : {file_path}", 404
+            
+        try:
+            # On lit le contenu du fichier HTML directement
+            with open(file_path, 'r', encoding='utf-8') as f:
+                html_content = f.read()
+            
+            # On utilise render_template_string pour injecter les variables
+            return render_template_string(html_content, 
+                                        config=config, 
+                                        profile={'name': 'Adrien'})
+        except Exception as e:
+            logger.error(f"❌ Erreur lecture module {module_id}: {e}")
+            return f"Erreur de rendu : {str(e)}", 500
+            
+    return "Module non trouvé", 404
+
+@app.route('/profile_manager')
+def profile_manager():
+    try:
+        return render_template('profile_manager.html', modules=AVAILABLE_MODULES, profile=DEFAULT_PROFILE)
+    except Exception as e:
+        return f"Erreur Profile Manager: {str(e)}", 500
+
+@app.route('/hud')
+def hud():
+    return render_template('hud.html', profile=DEFAULT_PROFILE)
+
+@app.route('/user_interface')
+def user_interface():
+    return render_template('user_interface.html', profile=DEFAULT_PROFILE)
+
+@app.route('/save_profile', methods=['POST'])
+def save_profile():
+    from flask import request
+    data = request.json
+    logger.info(f"👤 Nouveau profil reçu : {data.get('name')}")
+    return jsonify({"status": "success"})
+
+# Routes statiques restantes
 @app.route('/dashboard')
-def dashboard():
-    """Dashboard principal"""
-    return render_template('dashboard.html')
+def dashboard(): return render_template('dashboard.html')
+
+@app.route('/diagnostic')
+def diagnostic(): return render_template('diagnostic.html')
+
+@app.route('/settings')
+def settings(): return render_template('settings.html')
+
+@app.route('/mobile')
+def mobile(): return render_template('mobile.html')
+
+# ============================================================================
+# FLUX VIDÉO & API
+# ============================================================================
 
 @app.route('/video_feed_pi')
 def video_feed_pi():
-    """Flux vidéo Pi Camera (MJPEG)"""
-    
     def gen_frames():
-        frame_count = 0
         while True:
+            # On ne fait QUE lire et envoyer, l'IA sera traitée ailleurs
+            ret, frame = pi_camera.read(timeout=0.2)
+            if not ret or frame is None:
+                time.sleep(0.1)
+                continue
+
             try:
-                ret, frame = pi_camera.read(timeout=0.5)
-                
-                if not ret or frame is None:
-                    eventlet.sleep(0.05)
-                    continue
-                
-                global last_frame_pi, current_gesture, detection_stats, camera_stats
-                
-                # Détection geste
-                gesture, _ = gesture_detector.detect(frame)
-                current_gesture = gesture
-                
-                # Détection objets (YOLOv8n)
-                frame_annotated, detections = yolo_detector.detect(frame)
-                detection_stats = detections
-                
-                # Capture snapshot si geste "SYSTEM_START" (salut)
-                if gesture == "PALM":  # 👋 Salut
-                    snapshot_manager.capture(
-                        frame_annotated,
-                        gesture=gesture,
-                        metadata={
-                            "objects_detected": len(detections["objects"]),
-                            "detection_time_ms": detections.get("inference_time_ms", 0)
-                        }
-                    )
-                    socketio.emit('snapshot_event', {
-                        'gesture': gesture,
-                        'timestamp': datetime.now().isoformat(),
-                        'objects': detections["objects"]
-                    })
-                
-                # Encodage JPEG
-                _, buffer = cv2.imencode('.jpg', frame_annotated, [cv2.IMWRITE_JPEG_QUALITY, 80])
-                last_frame_pi = buffer.tobytes()
-                
-                frame_count += 1
-                camera_stats["frames"] = frame_count
-                camera_stats["current_gesture"] = gesture
+                # Compression légère pour la fluidité
+                _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+                frame_bytes = buffer.tobytes()
                 
                 yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' + last_frame_pi + b'\r\n')
-                
-                eventlet.sleep(0.02)
-            
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+                time.sleep(0.04) # Limite à 25 FPS
             except Exception as e:
-                logger.error(f"❌ Erreur flux vidéo: {e}")
-                camera_stats["errors"] += 1
-                eventlet.sleep(0.1)
+                continue
     
     return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
-
-
-@app.route('/api/camera/status')
-def api_camera_status():
-    """Status de la caméra"""
-    return jsonify({
-        "timestamp": datetime.now().isoformat(),
-        "pi_camera": {
-            **camera_stats,
-            **pi_camera.get_stats()
-        },
-        "current_gesture": current_gesture,
-        "detection_stats": detection_stats
-    })
-
-@app.route('/api/snapshots')
-def api_snapshots():
-    """Liste des snapshots"""
-    return jsonify({
-        "snapshots": snapshot_manager.get_recent_snapshots(limit=20),
-        "snapshots_dir": str(snapshot_manager.snapshots_dir)
-    })
-
-@app.route('/snapshots/<filename>')
-def get_snapshot(filename):
-    """Servir un snapshot"""
-    from flask import send_from_directory
-    return send_from_directory(str(snapshot_manager.snapshots_dir), filename)
-
 
 # ============================================================================
 # SOCKET.IO EVENTS
@@ -632,7 +741,7 @@ def background_monitoring():
                 'timestamp': datetime.now().isoformat()
             })
             
-            eventlet.sleep(5)
+            time.sleep(5)
         
         except Exception as e:
             logger.error(f"❌ Erreur monitoring: {e}")
@@ -642,6 +751,7 @@ def background_monitoring():
 # ============================================================================
 # MAIN
 # ============================================================================
+
 
 if __name__ == '__main__':
     logger.info("="*80)
